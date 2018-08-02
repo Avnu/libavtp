@@ -1,24 +1,14 @@
 dist: trusty
 sudo: required
-
 language: c
-# git submodules workaround
-git:
-  submodules: false
-# use sed to replace SSH URL with the public URL, then init submodules 
+compiler: gcc
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install cmake curl unzip pkg-config gcc-4.8 g++-4.8
+  - sudo apt-get install cmake curl unzip pkg-config gcc-4.8
   - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 20
-  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 20
   - sudo update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 30
   - sudo update-alternatives --set cc /usr/bin/gcc
-  - sudo update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 30
-  - sudo update-alternatives --set c++ /usr/bin/g++
-compiler:
-  - gcc
 install:
-  - sudo apt-get update -qq
   - sudo apt-get install -y python3-pip linux-headers-4.4.0-75-generic
   - curl -L "https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip"  -o ninja-linux.zip
   - sudo unzip ninja-linux.zip -d /usr/local/bin
@@ -34,5 +24,4 @@ install:
   - sudo make install
   - popd
   - sudo cp /usr/src/linux-headers-4.4.0-75/include/uapi/linux/if_ether.h /usr/include/linux 
-
 script: ./travis.sh
