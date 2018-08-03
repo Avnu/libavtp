@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/AVnu/libavtp.svg?branch=master)](https://travis-ci.org/AVnu/libavtp)
+
 # About
 
 Open source implementation of Audio Video Transport Protocol (AVTP) specified
