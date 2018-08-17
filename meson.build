@@ -89,3 +89,12 @@ executable(
 	dependencies : mdep,
 	build_by_default: false,
 )
+
+executable(
+	'crf-listener',
+	'examples/crf-listener.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies : mdep,
+	build_by_default: false,
+)
