@@ -62,6 +62,9 @@ test('AVTP API', test_avtp)
 test('AAF API', test_aaf)
 test('CRF API', test_crf)
 
+cc = meson.get_compiler('c')
+mdep = cc.find_library('m', required : false)
+
 executable(
 	'aaf-talker',
 	'examples/aaf-talker.c',
@@ -75,5 +78,14 @@ executable(
 	'examples/aaf-listener.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
+	build_by_default: false,
+)
+
+executable(
+	'crf-talker',
+	'examples/crf-talker.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies : mdep,
 	build_by_default: false,
 )
