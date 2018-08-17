@@ -49,8 +49,18 @@ test_aaf = executable(
 	build_by_default: false,
 )
 
+test_crf = executable(
+	'test-crf',
+	'unit/test-crf.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies: dependency('cmocka'),
+	build_by_default: false,
+)
+
 test('AVTP API', test_avtp)
 test('AAF API', test_aaf)
+test('CRF API', test_crf)
 
 executable(
 	'aaf-talker',
