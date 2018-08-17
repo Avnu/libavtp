@@ -10,6 +10,7 @@ avtp_lib = library(
 	[
 	 'src/avtp.c',
 	 'src/avtp_aaf.c',
+	 'src/avtp_crf.c',
 	],
 	include_directories: include_directories('include'),
 	install: true,
@@ -18,6 +19,7 @@ avtp_lib = library(
 install_headers(
 	'include/avtp.h',
 	'include/avtp_aaf.h',
+	'include/avtp_crf.h',
 )
 
 pkg = import('pkgconfig')
