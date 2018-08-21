@@ -10,6 +10,7 @@ avtp_lib = library(
 	[
 	 'src/avtp.c',
 	 'src/avtp_aaf.c',
+	 'src/avtp_crf.c',
 	],
 	include_directories: include_directories('include'),
 	install: true,
@@ -18,6 +19,7 @@ avtp_lib = library(
 install_headers(
 	'include/avtp.h',
 	'include/avtp_aaf.h',
+	'include/avtp_crf.h',
 )
 
 pkg = import('pkgconfig')
@@ -47,8 +49,21 @@ test_aaf = executable(
 	build_by_default: false,
 )
 
+test_crf = executable(
+	'test-crf',
+	'unit/test-crf.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies: dependency('cmocka'),
+	build_by_default: false,
+)
+
 test('AVTP API', test_avtp)
 test('AAF API', test_aaf)
+test('CRF API', test_crf)
+
+cc = meson.get_compiler('c')
+mdep = cc.find_library('m', required : false)
 
 executable(
 	'aaf-talker',
@@ -63,5 +78,23 @@ executable(
 	'examples/aaf-listener.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
+	build_by_default: false,
+)
+
+executable(
+	'crf-talker',
+	'examples/crf-talker.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies : mdep,
+	build_by_default: false,
+)
+
+executable(
+	'crf-listener',
+	'examples/crf-listener.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies : mdep,
 	build_by_default: false,
 )
