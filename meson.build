@@ -12,6 +12,7 @@ avtp_lib = library(
 	 'src/avtp_aaf.c',
 	 'src/avtp_crf.c',
 	],
+	version: meson.project_version(),
 	include_directories: include_directories('include'),
 	install: true,
 )
@@ -26,7 +27,7 @@ pkg = import('pkgconfig')
 pkg.generate(
 	name: 'avtp',
 	description: 'AVTP packetization library',
-	version: '0.1',
+	version: meson.project_version(),
 	url: 'github.com/AVnu/OpenAvnu',
 	libraries: avtp_lib,
 )
