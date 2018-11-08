@@ -30,6 +30,10 @@
 #include <errno.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* AVTP subtypes values. For further information refer to section 4.4.3.2 from
  * IEEE 1722-2016 spec.
  */
@@ -104,3 +108,7 @@ int avtp_pdu_get(const struct avtp_common_pdu *pdu, enum avtp_field field,
  */
 int avtp_pdu_set(struct avtp_common_pdu *pdu, enum avtp_field field,
 								uint32_t val);
+
+#ifdef __cplusplus
+}
+#endif

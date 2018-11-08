@@ -30,6 +30,10 @@
 #include <errno.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* CRF 'type' field values. */
 #define AVTP_CRF_TYPE_USER			0x00
 #define AVTP_CRF_TYPE_AUDIO_SAMPLE		0x01
@@ -100,3 +104,7 @@ int avtp_crf_pdu_set(struct avtp_crf_pdu *pdu, enum avtp_crf_field field,
  *    -EINVAL: If any argument is invalid.
  */
 int avtp_crf_pdu_init(struct avtp_crf_pdu *pdu);
+
+#ifdef __cplusplus
+}
+#endif

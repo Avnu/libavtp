@@ -30,6 +30,10 @@
 #include <errno.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* AAF PCM 'format' field values. */
 #define AVTP_AAF_FORMAT_USER			0x00
 #define AVTP_AAF_FORMAT_FLOAT_32BIT		0x01
@@ -106,3 +110,7 @@ int avtp_aaf_pdu_set(struct avtp_stream_pdu *pdu, enum avtp_aaf_field field,
  *    -EINVAL: If any argument is invalid.
  */
 int avtp_aaf_pdu_init(struct avtp_stream_pdu *pdu);
+
+#ifdef __cplusplus
+}
+#endif
