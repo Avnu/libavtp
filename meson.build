@@ -11,6 +11,7 @@ avtp_lib = library(
 	 'src/avtp.c',
 	 'src/avtp_aaf.c',
 	 'src/avtp_crf.c',
+	 'src/avtp_cvf.c',
 	 'src/avtp_stream.c',
 	],
 	version: meson.project_version(),
@@ -22,6 +23,7 @@ install_headers(
 	'include/avtp.h',
 	'include/avtp_aaf.h',
 	'include/avtp_crf.h',
+	'include/avtp_cvf.h',
 )
 
 pkg = import('pkgconfig')

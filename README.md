@@ -40,6 +40,7 @@ AVTP protocol defines several AVTPDU type formats (see Table 6 from IEEE
 formarts is:
 * AAF (PCM encapsulation only)
 * CRF
+* CVF (H.264 only)
 
 # Examples
 
