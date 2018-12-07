@@ -72,10 +72,20 @@ test_stream = executable(
 	build_by_default: false,
 )
 
+test_cvf = executable(
+	'test-cvf',
+	'unit/test-cvf.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies: dependency('cmocka'),
+	build_by_default: false,
+)
+
 test('AVTP API', test_avtp)
 test('Stream API', test_stream)
 test('AAF API', test_aaf)
 test('CRF API', test_crf)
+test('CVF API', test_cvf)
 
 cc = meson.get_compiler('c')
 mdep = cc.find_library('m', required : false)
