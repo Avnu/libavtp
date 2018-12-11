@@ -127,3 +127,12 @@ executable(
 	dependencies : mdep,
 	build_by_default: false,
 )
+
+executable(
+	'cvf-talker',
+	'examples/cvf-talker.c',
+	'examples/common.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	build_by_default: false,
+)
