@@ -27,7 +27,7 @@
 
 #pragma once
 
-#define BIT(n)				(1UL << n)
+#define BIT(n)				(1ULL << n)
 
 #define BITMASK(len)			(BIT(len) - 1)
 
