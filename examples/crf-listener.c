@@ -95,6 +95,7 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 #include <math.h>
+#include <inttypes.h>
 
 #include "avtp.h"
 #include "avtp_crf.h"
@@ -296,7 +297,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != 1) {
-		fprintf(stderr, "CRF: sv mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "CRF: sv mismatch: expected %u, got %" PRIu64 "\n",
 								1, val64);
 		return false;
 	}
@@ -307,7 +308,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != 0) {
-		fprintf(stderr, "CRF: fs mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "CRF: fs mismatch: expected %u, got %" PRIu64 "\n",
 								0, val64);
 		return false;
 	}
@@ -323,7 +324,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		 * issue and continue to process the packet. We don't want to
 		 * invalidate it since it is a valid packet after all.
 		 */
-		fprintf(stderr, "CRF: Sequence number mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "CRF: Sequence number mismatch: expected %u, got %" PRIu64 "\n",
 							crf_seq_num, val64);
 
 		crf_seq_num = val64;
@@ -337,7 +338,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_CRF_TYPE_AUDIO_SAMPLE) {
-		fprintf(stderr, "CRF: Format mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "CRF: Format mismatch: expected %u, got %" PRIu64 "\n",
 					AVTP_CRF_TYPE_AUDIO_SAMPLE, val64);
 		return false;
 	}
@@ -349,7 +350,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != CRF_STREAM_ID) {
-		fprintf(stderr, "CRF: Stream ID mismatch: expected %lu, got %lu\n",
+		fprintf(stderr, "CRF: Stream ID mismatch: expected %" PRIu64 ", got %" PRIu64 "\n",
 							CRF_STREAM_ID, val64);
 		return false;
 	}
@@ -361,7 +362,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_CRF_PULL_MULT_BY_1) {
-		fprintf(stderr, "CRF Pull mismatch: expected %u, got %lu",
+		fprintf(stderr, "CRF Pull mismatch: expected %u, got %" PRIu64 "\n",
 					AVTP_CRF_PULL_MULT_BY_1, val64);
 		return false;
 	}
@@ -373,7 +374,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != CRF_SAMPLE_RATE) {
-		fprintf(stderr, "CRF Base frequency: expected %u, got %lu\n",
+		fprintf(stderr, "CRF Base frequency: expected %u, got %" PRIu64 "\n",
 						CRF_SAMPLE_RATE, val64);
 		return false;
 	}
@@ -385,7 +386,7 @@ static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
 		return false;
 	}
 	if (val64 != CRF_DATA_LEN) {
-		fprintf(stderr, "CRF Data length mismatch: expected %lu, got %lu\n",
+		fprintf(stderr, "CRF Data length mismatch: expected %zu, got %" PRIu64 "\n",
 							CRF_DATA_LEN, val64);
 		return false;
 	}
@@ -417,7 +418,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != 1) {
-		fprintf(stderr, "AAF: tv mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF: tv mismatch: expected %u, got %" PRIu64 "\n",
 								1, val64);
 		return false;
 	}
@@ -428,7 +429,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_PCM_SP_NORMAL) {
-		fprintf(stderr, "AAF: tv mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF: tv mismatch: expected %u, got %" PRIu64 "\n",
 								1, val64);
 		return false;
 	}
@@ -440,7 +441,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AAF_STREAM_ID) {
-		fprintf(stderr, "AAF: Stream ID mismatch: expected %lu, got %lu\n",
+		fprintf(stderr, "AAF: Stream ID mismatch: expected %" PRIu64 ", got %" PRIu64 "\n",
 							AAF_STREAM_ID, val64);
 		return false;
 	}
@@ -457,7 +458,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		 * issue and continue to process the packet. We don't want to
 		 * invalidate it since it is a valid packet after all.
 		 */
-		fprintf(stderr, "AAF Sequence number mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF Sequence number mismatch: expected %u, got %" PRIu64 "\n",
 							aaf_seq_num, val64);
 
 		aaf_seq_num = val64;
@@ -471,7 +472,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_FORMAT_INT_16BIT) {
-		fprintf(stderr, "AAF: Format mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF: Format mismatch: expected %u, got %" PRIu64 "\n",
 					AVTP_AAF_FORMAT_INT_16BIT, val64);
 		return false;
 	}
@@ -483,7 +484,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_PCM_NSR_48KHZ) {
-		fprintf(stderr, "AAF: Sample rate mismatch: expected %u, got %lu",
+		fprintf(stderr, "AAF: Sample rate mismatch: expected %u, got %" PRIu64 "\n",
 						AVTP_AAF_PCM_NSR_48KHZ, val64);
 		return false;
 	}
@@ -495,7 +496,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AAF_NUM_CHANNELS) {
-		fprintf(stderr, "AAF: Channels mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF: Channels mismatch: expected %u, got %" PRIu64 "\n",
 						AAF_NUM_CHANNELS, val64);
 		return false;
 	}
@@ -506,7 +507,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != 16) {
-		fprintf(stderr, "AAF: Depth mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF: Depth mismatch: expected %u, got %" PRIu64 "\n",
 								16, val64);
 		return false;
 	}
@@ -518,7 +519,7 @@ static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AAF_DATA_LEN) {
-		fprintf(stderr, "AAF: Data len mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "AAF: Data len mismatch: expected %u, got %" PRIu64 "\n",
 							AAF_DATA_LEN, val64);
 		return false;
 	}
