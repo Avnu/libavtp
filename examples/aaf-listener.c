@@ -70,6 +70,7 @@
 #include <sys/queue.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include "avtp.h"
 #include "avtp_aaf.h"
@@ -274,7 +275,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != 1) {
-		fprintf(stderr, "tv mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "tv mismatch: expected %u, got %" PRIu64 "\n",
 								1, val64);
 		return false;
 	}
@@ -285,7 +286,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_PCM_SP_NORMAL) {
-		fprintf(stderr, "tv mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "tv mismatch: expected %u, got %" PRIu64 "\n",
 								1, val64);
 		return false;
 	}
@@ -296,7 +297,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != STREAM_ID) {
-		fprintf(stderr, "Stream ID mismatch: expected %lu, got %lu\n",
+		fprintf(stderr, "Stream ID mismatch: expected %" PRIu64 ", got %" PRIu64 "\n",
 							STREAM_ID, val64);
 		return false;
 	}
@@ -312,7 +313,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		 * issue and continue to process the packet. We don't want to
 		 * invalidate it since it is a valid packet after all.
 		 */
-		fprintf(stderr, "Sequence number mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "Sequence number mismatch: expected %u, got %" PRIu64 "\n",
 							expected_seq, val64);
 		expected_seq = val64;
 	}
@@ -325,7 +326,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_FORMAT_INT_16BIT) {
-		fprintf(stderr, "Format mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "Format mismatch: expected %u, got %" PRIu64 "\n",
 					AVTP_AAF_FORMAT_INT_16BIT, val64);
 		return false;
 	}
@@ -336,7 +337,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_PCM_NSR_48KHZ) {
-		fprintf(stderr, "Sample rate mismatch: expected %u, got %lu",
+		fprintf(stderr, "Sample rate mismatch: expected %u, got %" PRIu64 "\n",
 						AVTP_AAF_PCM_NSR_48KHZ, val64);
 		return false;
 	}
@@ -347,7 +348,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != NUM_CHANNELS) {
-		fprintf(stderr, "Channels mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "Channels mismatch: expected %u, got %" PRIu64 "\n",
 							NUM_CHANNELS, val64);
 		return false;
 	}
@@ -358,7 +359,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != 16) {
-		fprintf(stderr, "Depth mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "Depth mismatch: expected %u, got %" PRIu64 "\n",
 								16, val64);
 		return false;
 	}
@@ -369,7 +370,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != DATA_LEN) {
-		fprintf(stderr, "Data len mismatch: expected %u, got %lu\n",
+		fprintf(stderr, "Data len mismatch: expected %u, got %" PRIu64 "\n",
 							DATA_LEN, val64);
 		return false;
 	}
