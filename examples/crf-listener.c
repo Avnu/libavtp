@@ -100,6 +100,7 @@
 #include "avtp.h"
 #include "avtp_crf.h"
 #include "avtp_aaf.h"
+#include "examples/common.h"
 
 #define AAF_STREAM_ID		0xAABBCCDDEEFF0001
 #define AAF_NUM_SAMPLES 	6 /* Number of samples per packet. */
@@ -829,50 +830,29 @@ static int setup_rx_socket(void)
 	 * running, we set protocol type to ETH_P_ALL to allow CRF traffic to
 	 * loop back.
 	 */
-	struct sockaddr_ll sk_addr = {
-		.sll_family = AF_PACKET,
-		.sll_protocol = htons(ETH_P_ALL),
-	};
-
-	fd = socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_ALL));
+	fd = create_listener_socket(ifname, crf_macaddr, ETH_P_ALL);
 	if (fd < 0) {
 		perror("Failed to open socket");
 		return -1;
 	}
 
-	snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", ifname);
-	res = ioctl(fd, SIOCGIFINDEX, &req);
-	if (res < 0) {
-		perror("Failed to get interface index");
-		goto err;
-	}
-
-	sk_addr.sll_ifindex = req.ifr_ifindex;
-
-	res = bind(fd, (struct sockaddr *) &sk_addr, sizeof(sk_addr));
-	if (res < 0) {
-		perror("Couldn't bind() to interface");
-		goto err;
-	}
-
-	mreq.mr_ifindex = req.ifr_ifindex;
-	mreq.mr_type = PACKET_MR_MULTICAST;
-	mreq.mr_alen = ETH_ALEN;
-	memcpy(&mreq.mr_address, crf_macaddr, ETH_ALEN);
-	res = setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
-					&mreq, sizeof(struct packet_mreq));
-	if (res < 0) {
-		perror("Couldn't set PACKET_ADD_MEMBERSHIP");
-		goto err;
-	}
-
 	if (mode == MODE_LISTENER) {
+		snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", ifname);
+		res = ioctl(fd, SIOCGIFINDEX, &req);
+		if (res < 0) {
+			perror("Failed to get interface index");
+			goto err;
+		}
+
+		mreq.mr_ifindex = req.ifr_ifindex;
+		mreq.mr_type = PACKET_MR_MULTICAST;
+		mreq.mr_alen = ETH_ALEN;
 		memcpy(&mreq.mr_address, aaf_macaddr, ETH_ALEN);
 
 		res = setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq,
 						sizeof(struct packet_mreq));
 		if (res < 0) {
-			perror("Couldn't set PACKET_ADD_MEMBERSHIP for AAF stream");
+			perror("Couldn't add membership for AAF stream");
 			goto err;
 		}
 	}

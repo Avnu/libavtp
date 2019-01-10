@@ -55,21 +55,18 @@
  * $ arecord -f dat -t raw -D <capture-device> | aaf-talker <args>
  */
 
-#include <alloca.h>
 #include <argp.h>
 #include <arpa/inet.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "avtp.h"
 #include "avtp_aaf.h"
+#include "examples/common.h"
 
 #define STREAM_ID		0xAABBCCDDEEFF0001
 #define SAMPLE_SIZE		2 /* Sample size in bytes. */
@@ -123,53 +120,6 @@ static error_t parser(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = { options, parser };
 
-static int setup_socket(void)
-{
-	int fd, res;
-
-	fd = socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_TSN));
-	if (fd < 0) {
-		perror("Failed to open socket");
-		return -1;
-	}
-
-	if (priority != -1) {
-		res = setsockopt(fd, SOL_SOCKET, SO_PRIORITY, &priority,
-							sizeof(priority));
-		if (res < 0) {
-			perror("Failed to set priority");
-			goto err;
-		}
-
-	}
-
-	return fd;
-
-err:
-	close(fd);
-	return -1;
-}
-
-static int calculate_avtp_time(uint32_t *avtp_time)
-{
-	int res;
-	struct timespec tspec;
-	uint64_t ptime;
-
-	res = clock_gettime(CLOCK_REALTIME, &tspec);
-	if (res < 0) {
-		perror("Failed to get time");
-		return -1;
-	}
-
-	ptime = (tspec.tv_sec * NSEC_PER_SEC) +
-			(max_transit_time * NSEC_PER_MSEC) + tspec.tv_nsec;
-
-	*avtp_time = ptime % (1ULL << 32);
-
-	return 0;
-}
-
 static int init_pdu(struct avtp_stream_pdu *pdu)
 {
 	int res;
@@ -219,29 +169,19 @@ static int init_pdu(struct avtp_stream_pdu *pdu)
 int main(int argc, char *argv[])
 {
 	int fd, res;
-	struct ifreq req;
 	struct sockaddr_ll sk_addr;
 	struct avtp_stream_pdu *pdu = alloca(PDU_SIZE);
 	uint8_t seq_num = 0;
 
 	argp_parse(&argp, argc, argv, 0, NULL, NULL);
 
-	fd = setup_socket();
+	fd = create_talker_socket(priority);
 	if (fd < 0)
 		return 1;
 
-	snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", ifname);
-	res = ioctl(fd, SIOCGIFINDEX, &req);
-	if (res < 0) {
-		perror("Failed to get interface index");
+	res = setup_socket_address(fd, ifname, macaddr, ETH_P_TSN, &sk_addr);
+	if (res < 0)
 		goto err;
-	}
-
-	sk_addr.sll_family = AF_PACKET;
-	sk_addr.sll_protocol = htons(ETH_P_TSN);
-	sk_addr.sll_halen = ETH_ALEN;
-	sk_addr.sll_ifindex = req.ifr_ifindex;
-	memcpy(&sk_addr.sll_addr, macaddr, ETH_ALEN);
 
 	res = init_pdu(pdu);
 	if (res < 0)
@@ -262,7 +202,7 @@ int main(int argc, char *argv[])
 								n, DATA_LEN);
 		}
 
-		res = calculate_avtp_time(&avtp_time);
+		res = calculate_avtp_time(&avtp_time, max_transit_time);
 		if (res < 0) {
 			fprintf(stderr, "Failed to calculate avtp time\n");
 			goto err;

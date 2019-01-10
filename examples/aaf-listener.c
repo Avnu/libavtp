@@ -62,11 +62,8 @@
 #include <linux/if_packet.h>
 #include <poll.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <sys/queue.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
@@ -74,6 +71,7 @@
 
 #include "avtp.h"
 #include "avtp_aaf.h"
+#include "examples/common.h"
 
 #define STREAM_ID		0xAABBCCDDEEFF0001
 #define SAMPLE_SIZE		2 /* Sample size in bytes. */
@@ -125,23 +123,6 @@ static error_t parser(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = { options, parser };
 
-static int arm_timer(int fd, struct timespec *tspec)
-{
-	int res;
-	struct itimerspec timer_spec = { 0 };
-
-	timer_spec.it_value.tv_sec = tspec->tv_sec;
-	timer_spec.it_value.tv_nsec = tspec->tv_nsec;
-
-	res = timerfd_settime(fd, TFD_TIMER_ABSTIME, &timer_spec, NULL);
-	if (res < 0) {
-		perror("Failed to set timer");
-		return -1;
-	}
-
-	return 0;
-}
-
 /* Schedule 'pcm_sample' to be presented at time specified by 'tspec'. */
 static int schedule_sample(int fd, struct timespec *tspec, uint8_t *pcm_sample)
 {
@@ -174,70 +155,6 @@ static int schedule_sample(int fd, struct timespec *tspec, uint8_t *pcm_sample)
 	}
 
 	return 0;
-}
-
-static int present_sample(uint8_t *pcm_sample)
-{
-	ssize_t n;
-
-	n = write(STDOUT_FILENO, pcm_sample, DATA_LEN);
-	if (n < 0 || n != DATA_LEN) {
-		perror("Failed to write()");
-		return -1;
-	}
-
-	return 0;
-}
-
-static int setup_socket(void)
-{
-	int fd, res;
-	struct ifreq req;
-	struct packet_mreq mreq;
-
-	struct sockaddr_ll sk_addr = {
-		.sll_family = AF_PACKET,
-		.sll_protocol = htons(ETH_P_TSN),
-	};
-
-	fd = socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_TSN));
-	if (fd < 0) {
-		perror("Failed to open socket");
-		return -1;
-	}
-
-	snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", ifname);
-	res = ioctl(fd, SIOCGIFINDEX, &req);
-	if (res < 0) {
-		perror("Failed to get interface index");
-		goto err;
-	}
-
-	sk_addr.sll_ifindex = req.ifr_ifindex;
-
-	res = bind(fd, (struct sockaddr *) &sk_addr, sizeof(sk_addr));
-	if (res < 0) {
-		perror("Couldn't bind() to interface");
-		goto err;
-	}
-
-	mreq.mr_ifindex = sk_addr.sll_ifindex;
-	mreq.mr_type = PACKET_MR_MULTICAST;
-	mreq.mr_alen = ETH_ALEN;
-	memcpy(&mreq.mr_address, macaddr, ETH_ALEN);
-
-	res = setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
-					&mreq, sizeof(struct packet_mreq));
-	if (res < 0) {
-		perror("Couldn't set PACKET_ADD_MEMBERSHIP");
-		goto err;
-	}
-
-	return fd;
-
-err:
-	close(fd);
-	return -1;
 }
 
 static bool is_valid_packet(struct avtp_stream_pdu *pdu)
@@ -378,49 +295,11 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 	return true;
 }
 
-static int get_presentation_time(struct avtp_stream_pdu *pdu,
-							struct timespec *tspec)
-{
-	int res;
-	uint64_t avtp_time, ptime, now;
-
-	res = avtp_aaf_pdu_get(pdu, AVTP_AAF_FIELD_TIMESTAMP, &avtp_time);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get AVTP time from PDU\n");
-		return -1;
-	}
-
-	res = clock_gettime(CLOCK_REALTIME, tspec);
-	if (res < 0) {
-		perror("Failed to get time from PHC");
-		return -1;
-	}
-
-	now = (tspec->tv_sec * NSEC_PER_SEC) + tspec->tv_nsec;
-
-	/* The avtp_timestamp within AAF packet is the lower part (32
-	 * less-significant bits) from presentation time calculated by the
-	 * talker.
-	 */
-	ptime = (now & 0xFFFFFFFF00000000ULL) | avtp_time;
-
-	/* If 'ptime' is less than the 'now', it means the higher part
-	 * from 'ptime' needs to be incremented by 1 in order to recover the
-	 * presentation time set by the talker.
-	 */
-	if (ptime < now)
-		ptime += (1ULL << 32);
-
-	tspec->tv_sec = ptime / NSEC_PER_SEC;
-	tspec->tv_nsec = ptime % NSEC_PER_SEC;
-
-	return 0;
-}
-
 static int new_packet(int sk_fd, int timer_fd)
 {
 	int res;
 	ssize_t n;
+	uint64_t avtp_time;
 	struct timespec tspec;
 	struct avtp_stream_pdu *pdu = alloca(PDU_SIZE);
 
@@ -437,7 +316,13 @@ static int new_packet(int sk_fd, int timer_fd)
 		return 0;
 	}
 
-	res = get_presentation_time(pdu, &tspec);
+	res = avtp_aaf_pdu_get(pdu, AVTP_AAF_FIELD_TIMESTAMP, &avtp_time);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get AVTP time from PDU\n");
+		return -1;
+	}
+
+	res = get_presentation_time(avtp_time, &tspec);
 	if (res < 0)
 		return -1;
 
@@ -466,7 +351,7 @@ static int timeout(int fd)
 	entry = STAILQ_FIRST(&samples);
 	assert(entry != NULL);
 
-	res = present_sample(entry->pcm_sample);
+	res = present_data(entry->pcm_sample, DATA_LEN);
 	if (res < 0)
 		return -1;
 
@@ -493,7 +378,7 @@ int main(int argc, char *argv[])
 
 	STAILQ_INIT(&samples);
 
-	sk_fd = setup_socket();
+	sk_fd = create_listener_socket(ifname, macaddr, ETH_P_TSN);
 	if (sk_fd < 0)
 		return 1;
 
