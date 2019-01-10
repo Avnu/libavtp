@@ -93,6 +93,7 @@ mdep = cc.find_library('m', required : false)
 executable(
 	'aaf-talker',
 	'examples/aaf-talker.c',
+	'examples/common.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
 	build_by_default: false,
@@ -101,6 +102,7 @@ executable(
 executable(
 	'aaf-listener',
 	'examples/aaf-listener.c',
+	'examples/common.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
 	build_by_default: false,
@@ -109,6 +111,7 @@ executable(
 executable(
 	'crf-talker',
 	'examples/crf-talker.c',
+	'examples/common.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
 	dependencies : mdep,
@@ -118,6 +121,7 @@ executable(
 executable(
 	'crf-listener',
 	'examples/crf-listener.c',
+	'examples/common.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
 	dependencies : mdep,

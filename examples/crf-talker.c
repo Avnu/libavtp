@@ -64,6 +64,7 @@
 
 #include "avtp.h"
 #include "avtp_crf.h"
+#include "examples/common.h"
 
 #define STREAM_ID		0xAABBCCDDEEFF0002
 
@@ -196,31 +197,20 @@ int main(int argc, char *argv[])
 	int sk_fd, res, idx;
 	uint8_t seq_num = 0;
 	uint64_t crf_time, rounded_mtt;
-	struct ifreq req = {0};
 	struct timespec clksrc_ts = {0};
 	struct sockaddr_ll sk_addr = {0};
 	struct avtp_crf_pdu *pdu = alloca(PDU_SIZE);
 
 	argp_parse(&argp, argc, argv, 0, NULL, NULL);
 
-	sk_fd = socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_TSN));
+	sk_fd = create_talker_socket(-1);
 	if (sk_fd < 0) {
-		perror("Failed to open socket");
 		return 1;
 	}
 
-	snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", ifname);
-	res = ioctl(sk_fd, SIOCGIFINDEX, &req);
-	if (res < 0) {
-		perror("Failed to get interface index");
+	res = setup_socket_address(sk_fd, ifname, macaddr, ETH_P_TSN, &sk_addr);
+	if (res < 0)
 		goto err;
-	}
-
-	sk_addr.sll_family = AF_PACKET;
-	sk_addr.sll_protocol = htons(ETH_P_TSN);
-	sk_addr.sll_halen = ETH_ALEN;
-	sk_addr.sll_ifindex = req.ifr_ifindex;
-	memcpy(&sk_addr.sll_addr, macaddr, ETH_ALEN);
 
 	res = init_pdu(pdu);
 	if (res < 0)
