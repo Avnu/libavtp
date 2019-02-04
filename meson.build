@@ -157,3 +157,12 @@ executable(
 	link_with: avtp_lib,
 	build_by_default: false,
 )
+
+executable(
+	'ieciidc-talker',
+	'examples/ieciidc-talker.c',
+	'examples/common.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	build_by_default: false,
+)
