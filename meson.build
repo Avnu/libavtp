@@ -166,3 +166,12 @@ executable(
 	link_with: avtp_lib,
 	build_by_default: false,
 )
+
+executable(
+	'ieciidc-listener',
+	'examples/ieciidc-listener.c',
+	'examples/common.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	build_by_default: false,
+)
