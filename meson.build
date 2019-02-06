@@ -11,6 +11,7 @@ avtp_lib = library(
 	 'src/avtp.c',
 	 'src/avtp_aaf.c',
 	 'src/avtp_crf.c',
+	 'src/avtp_stream.c',
 	],
 	version: meson.project_version(),
 	include_directories: include_directories('include'),
@@ -59,7 +60,18 @@ test_crf = executable(
 	build_by_default: false,
 )
 
+test_stream = executable(
+	'test-stream',
+	'unit/test-stream.c',
+	'src/avtp_stream.c',
+	include_directories: include_directories('include', 'src'),
+	link_with: avtp_lib,
+	dependencies: dependency('cmocka'),
+	build_by_default: false,
+)
+
 test('AVTP API', test_avtp)
+test('Stream API', test_stream)
 test('AAF API', test_aaf)
 test('CRF API', test_crf)
 

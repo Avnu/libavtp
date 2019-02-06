@@ -26,34 +26,23 @@
  */
 
 #include <arpa/inet.h>
-#include <endian.h>
 #include <string.h>
 
 #include "avtp.h"
 #include "avtp_aaf.h"
+#include "avtp_stream.h"
 #include "util.h"
 
-#define SHIFT_SV			(31 - 8)
-#define SHIFT_MR			(31 - 12)
-#define SHIFT_TV			(31 - 15)
-#define SHIFT_SEQ_NUM			(31 - 23)
 #define SHIFT_FORMAT			(31 - 7)
 #define SHIFT_NSR			(31 - 11)
 #define SHIFT_CHAN_PER_FRAME		(31 - 23)
-#define SHIFT_STREAM_DATA_LEN		(31 - 15)
 #define SHIFT_SP			(31 - 19)
 #define SHIFT_EVT			(31 - 23)
 
-#define MASK_SV				(BITMASK(1) << SHIFT_SV)
-#define MASK_MR				(BITMASK(1) << SHIFT_MR)
-#define MASK_TV				(BITMASK(1) << SHIFT_TV)
-#define MASK_SEQ_NUM			(BITMASK(8) << SHIFT_SEQ_NUM)
-#define MASK_TU				(BITMASK(1))
 #define MASK_FORMAT			(BITMASK(8) << SHIFT_FORMAT)
 #define MASK_NSR			(BITMASK(4) << SHIFT_NSR)
 #define MASK_CHAN_PER_FRAME		(BITMASK(10) << SHIFT_CHAN_PER_FRAME)
 #define MASK_BIT_DEPTH			(BITMASK(8))
-#define MASK_STREAM_DATA_LEN		(BITMASK(16) << SHIFT_STREAM_DATA_LEN)
 #define MASK_SP				(BITMASK(1) << SHIFT_SP)
 #define MASK_EVT			(BITMASK(4) << SHIFT_EVT)
 
@@ -64,31 +53,6 @@ static int get_field_value(const struct avtp_stream_pdu *pdu,
 	uint8_t shift;
 
 	switch (field) {
-	case AVTP_AAF_FIELD_SV:
-		mask = MASK_SV;
-		shift = SHIFT_SV;
-		bitmap = ntohl(pdu->subtype_data);
-		break;
-	case AVTP_AAF_FIELD_MR:
-		mask = MASK_MR;
-		shift = SHIFT_MR;
-		bitmap = ntohl(pdu->subtype_data);
-		break;
-	case AVTP_AAF_FIELD_TV:
-		mask = MASK_TV;
-		shift = SHIFT_TV;
-		bitmap = ntohl(pdu->subtype_data);
-		break;
-	case AVTP_AAF_FIELD_SEQ_NUM:
-		mask = MASK_SEQ_NUM;
-		shift = SHIFT_SEQ_NUM;
-		bitmap = ntohl(pdu->subtype_data);
-		break;
-	case AVTP_AAF_FIELD_TU:
-		mask = MASK_TU;
-		shift = 0;
-		bitmap = ntohl(pdu->subtype_data);
-		break;
 	case AVTP_AAF_FIELD_FORMAT:
 		mask = MASK_FORMAT;
 		shift = SHIFT_FORMAT;
@@ -108,11 +72,6 @@ static int get_field_value(const struct avtp_stream_pdu *pdu,
 		mask = MASK_BIT_DEPTH;
 		shift = 0;
 		bitmap = ntohl(pdu->format_specific);
-		break;
-	case AVTP_AAF_FIELD_STREAM_DATA_LEN:
-		mask = MASK_STREAM_DATA_LEN;
-		shift = SHIFT_STREAM_DATA_LEN;
-		bitmap = ntohl(pdu->packet_info);
 		break;
 	case AVTP_AAF_FIELD_SP:
 		mask = MASK_SP;
@@ -147,22 +106,19 @@ int avtp_aaf_pdu_get(const struct avtp_stream_pdu *pdu,
 	case AVTP_AAF_FIELD_TV:
 	case AVTP_AAF_FIELD_SEQ_NUM:
 	case AVTP_AAF_FIELD_TU:
+	case AVTP_AAF_FIELD_STREAM_DATA_LEN:
+	case AVTP_AAF_FIELD_TIMESTAMP:
+	case AVTP_AAF_FIELD_STREAM_ID:
+		res = avtp_stream_pdu_get(pdu, (enum avtp_stream_field) field,
+									val);
+		break;
 	case AVTP_AAF_FIELD_FORMAT:
 	case AVTP_AAF_FIELD_NSR:
 	case AVTP_AAF_FIELD_CHAN_PER_FRAME:
 	case AVTP_AAF_FIELD_BIT_DEPTH:
-	case AVTP_AAF_FIELD_STREAM_DATA_LEN:
 	case AVTP_AAF_FIELD_SP:
 	case AVTP_AAF_FIELD_EVT:
 		res = get_field_value(pdu, field, val);
-		break;
-	case AVTP_AAF_FIELD_TIMESTAMP:
-		*val = ntohl(pdu->avtp_time);
-		res = 0;
-		break;
-	case AVTP_AAF_FIELD_STREAM_ID:
-		*val = be64toh(pdu->stream_id);
-		res = 0;
 		break;
 	default:
 		res = -EINVAL;
@@ -179,31 +135,6 @@ static int set_field_value(struct avtp_stream_pdu *pdu,
 	uint8_t shift;
 
 	switch (field) {
-	case AVTP_AAF_FIELD_SV:
-		mask = MASK_SV;
-		shift = SHIFT_SV;
-		ptr = &pdu->subtype_data;
-		break;
-	case AVTP_AAF_FIELD_MR:
-		mask = MASK_MR;
-		shift = SHIFT_MR;
-		ptr = &pdu->subtype_data;
-		break;
-	case AVTP_AAF_FIELD_TV:
-		mask = MASK_TV;
-		shift = SHIFT_TV;
-		ptr = &pdu->subtype_data;
-		break;
-	case AVTP_AAF_FIELD_SEQ_NUM:
-		mask = MASK_SEQ_NUM;
-		shift = SHIFT_SEQ_NUM;
-		ptr = &pdu->subtype_data;
-		break;
-	case AVTP_AAF_FIELD_TU:
-		mask = MASK_TU;
-		shift = 0;
-		ptr = &pdu->subtype_data;
-		break;
 	case AVTP_AAF_FIELD_FORMAT:
 		mask = MASK_FORMAT;
 		shift = SHIFT_FORMAT;
@@ -223,11 +154,6 @@ static int set_field_value(struct avtp_stream_pdu *pdu,
 		mask = MASK_BIT_DEPTH;
 		shift = 0;
 		ptr = &pdu->format_specific;
-		break;
-	case AVTP_AAF_FIELD_STREAM_DATA_LEN:
-		mask = MASK_STREAM_DATA_LEN;
-		shift = SHIFT_STREAM_DATA_LEN;
-		ptr = &pdu->packet_info;
 		break;
 	case AVTP_AAF_FIELD_SP:
 		mask = MASK_SP;
@@ -266,25 +192,23 @@ int avtp_aaf_pdu_set(struct avtp_stream_pdu *pdu, enum avtp_aaf_field field,
 	case AVTP_AAF_FIELD_TV:
 	case AVTP_AAF_FIELD_SEQ_NUM:
 	case AVTP_AAF_FIELD_TU:
+	case AVTP_AAF_FIELD_STREAM_DATA_LEN:
+	case AVTP_AAF_FIELD_TIMESTAMP:
+	case AVTP_AAF_FIELD_STREAM_ID:
+		res = avtp_stream_pdu_set(pdu, (enum avtp_stream_field) field,
+									val);
+		break;
 	case AVTP_AAF_FIELD_FORMAT:
 	case AVTP_AAF_FIELD_NSR:
 	case AVTP_AAF_FIELD_CHAN_PER_FRAME:
 	case AVTP_AAF_FIELD_BIT_DEPTH:
-	case AVTP_AAF_FIELD_STREAM_DATA_LEN:
 	case AVTP_AAF_FIELD_SP:
 	case AVTP_AAF_FIELD_EVT:
 		res = set_field_value(pdu, field, val);
 		break;
-	case AVTP_AAF_FIELD_TIMESTAMP:
-		pdu->avtp_time = htonl(val);
-		res = 0;
-		break;
-	case AVTP_AAF_FIELD_STREAM_ID:
-		pdu->stream_id = htobe64(val);
-		res = 0;
-		break;
 	default:
 		res = -EINVAL;
+		break;
 	}
 
 	return res;
