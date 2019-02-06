@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Intel Corporation
+ * Copyright (c) 2019, Intel Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,54 +30,46 @@
 #include <errno.h>
 #include <stdint.h>
 
+#pragma GCC visibility push(hidden)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* AAF PCM 'format' field values. */
-#define AVTP_AAF_FORMAT_USER			0x00
-#define AVTP_AAF_FORMAT_FLOAT_32BIT		0x01
-#define AVTP_AAF_FORMAT_INT_32BIT		0x02
-#define AVTP_AAF_FORMAT_INT_24BIT		0x03
-#define AVTP_AAF_FORMAT_INT_16BIT		0x04
-#define AVTP_AAF_FORMAT_AES3_32BIT		0x05
-
-/* AAF PCM 'nsr' (nominal sample rate) field values. */
-#define AVTP_AAF_PCM_NSR_USER			0x00
-#define AVTP_AAF_PCM_NSR_8KHZ			0x01
-#define AVTP_AAF_PCM_NSR_16KHZ			0x02
-#define AVTP_AAF_PCM_NSR_32KHZ			0x03
-#define AVTP_AAF_PCM_NSR_44_1KHZ		0x04
-#define AVTP_AAF_PCM_NSR_48KHZ			0x05
-#define AVTP_AAF_PCM_NSR_88_2KHZ		0x06
-#define AVTP_AAF_PCM_NSR_96KHZ			0x07
-#define AVTP_AAF_PCM_NSR_176_4KHZ		0x08
-#define AVTP_AAF_PCM_NSR_192KHZ			0x09
-#define AVTP_AAF_PCM_NSR_24KHZ			0x0A
-
-/* AAF PCM 'sp' (sparse timestamp) field values. */
-#define AVTP_AAF_PCM_SP_NORMAL			0x00
-#define AVTP_AAF_PCM_SP_SPARSE			0x01
-
-enum avtp_aaf_field {
-	AVTP_AAF_FIELD_SV,
-	AVTP_AAF_FIELD_MR,
-	AVTP_AAF_FIELD_TV,
-	AVTP_AAF_FIELD_SEQ_NUM,
-	AVTP_AAF_FIELD_TU,
-	AVTP_AAF_FIELD_STREAM_ID,
-	AVTP_AAF_FIELD_TIMESTAMP,
-	AVTP_AAF_FIELD_STREAM_DATA_LEN,
-	AVTP_AAF_FIELD_FORMAT,
-	AVTP_AAF_FIELD_NSR,
-	AVTP_AAF_FIELD_CHAN_PER_FRAME,
-	AVTP_AAF_FIELD_BIT_DEPTH,
-	AVTP_AAF_FIELD_SP,
-	AVTP_AAF_FIELD_EVT,
-	AVTP_AAF_FIELD_MAX,
+/* XXX: To be able to use the functions provided by this header,
+ * without needing to direct "translate" enum values, it is necessary
+ * that any format specific enum have the following fields (excluding
+ * AVTP_STREAM_FIELD_MAX) in the same order as below. For instance,
+ * some `enum avtp_newformat_field` would start like:
+ *
+ * enum avtp_newformat_field {
+ *      AVTP_NEWFORMAT_FIELD_SV,
+ *      AVTP_NEWFORMAT_FIELD_MR,
+ *      // (other stream fields here)
+ *      AVTP_NEWFORMAT_FIELD_XYZ,
+ *      // (other newformat specific fields here)
+ * }
+ *
+ * This way, one can simply cast enums when calling functions from this
+ * header:
+ *
+ * avtp_stream_pdu_get(pdu, (enum avtp_stream_field) field, val);
+ *
+ * Otherwise, the mapping step would be necessary before the calls.
+ */
+enum avtp_stream_field {
+	AVTP_STREAM_FIELD_SV,
+	AVTP_STREAM_FIELD_MR,
+	AVTP_STREAM_FIELD_TV,
+	AVTP_STREAM_FIELD_SEQ_NUM,
+	AVTP_STREAM_FIELD_TU,
+	AVTP_STREAM_FIELD_STREAM_ID,
+	AVTP_STREAM_FIELD_TIMESTAMP,
+	AVTP_STREAM_FIELD_STREAM_DATA_LEN,
+	AVTP_STREAM_FIELD_MAX
 };
 
-/* Get value from AAF AVTPDU field.
+/* Get value from Stream AVTPDU field.
  * @pdu: Pointer to PDU struct.
  * @field: PDU field to be retrieved.
  * @val: Pointer to variable which the retrieved value should be saved.
@@ -86,10 +78,10 @@ enum avtp_aaf_field {
  *    0: Success.
  *    -EINVAL: If any argument is invalid.
  */
-int avtp_aaf_pdu_get(const struct avtp_stream_pdu *pdu,
-				enum avtp_aaf_field field, uint64_t *val);
+int avtp_stream_pdu_get(const struct avtp_stream_pdu *pdu,
+				enum avtp_stream_field field, uint64_t *val);
 
-/* Set value from AAF AVTPDU field.
+/* Set value from Stream AVTPDU field.
  * @pdu: Pointer to PDU struct.
  * @field: PDU field to be set.
  * @val: Value to be set.
@@ -98,19 +90,11 @@ int avtp_aaf_pdu_get(const struct avtp_stream_pdu *pdu,
  *    0: Success.
  *    -EINVAL: If any argument is invalid.
  */
-int avtp_aaf_pdu_set(struct avtp_stream_pdu *pdu, enum avtp_aaf_field field,
-								uint64_t val);
-
-/* Initialize AAF AVTPDU. All AVTPDU fields are initialized with zero except
- * 'subtype' (which is set to AVTP_SUBTYPE_AAF) and 'sv' (which is set to 1).
- * @pdu: Pointer to PDU struct.
- *
- * Return values:
- *    0: Success.
- *    -EINVAL: If any argument is invalid.
- */
-int avtp_aaf_pdu_init(struct avtp_stream_pdu *pdu);
+int avtp_stream_pdu_set(struct avtp_stream_pdu *pdu,
+				enum avtp_stream_field field, uint64_t val);
 
 #ifdef __cplusplus
 }
 #endif
+
+#pragma GCC visibility pop
