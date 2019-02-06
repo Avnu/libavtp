@@ -11,4 +11,5 @@ ninja -C build/ \
 	crf-listener \
 	cvf-talker \
 	cvf-listener \
-	ieciidc-talker
+	ieciidc-talker \
+	ieciidc-listener
