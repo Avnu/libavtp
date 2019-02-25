@@ -303,10 +303,10 @@ static void aaf_set_field_sv(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.subtype_data) == 0x00800000);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_mr(void **state)
@@ -318,10 +318,10 @@ static void aaf_set_field_mr(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.subtype_data) == 0x00080000);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_tv(void **state)
@@ -333,10 +333,10 @@ static void aaf_set_field_tv(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.subtype_data) == 0x00010000);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_seq_num(void **state)
@@ -348,10 +348,10 @@ static void aaf_set_field_seq_num(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.subtype_data) == 0x00005500);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_tu(void **state)
@@ -363,10 +363,10 @@ static void aaf_set_field_tu(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.subtype_data) == 0x00000001);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_stream_id(void **state)
@@ -379,10 +379,10 @@ static void aaf_set_field_stream_id(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(be64toh(pdu.stream_id) == 0xAABBCCDDEEFF0001);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_timestamp(void **state)
@@ -394,10 +394,10 @@ static void aaf_set_field_timestamp(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.avtp_time) == 0x80C0FFEE);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.format_specific == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_format(void **state)
@@ -410,10 +410,10 @@ static void aaf_set_field_format(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.format_specific) == 0x04000000);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_nsr(void **state)
@@ -426,10 +426,10 @@ static void aaf_set_field_nsr(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.format_specific) == 0x00500000);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_chan(void **state)
@@ -441,10 +441,10 @@ static void aaf_set_field_chan(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.format_specific) == 0x0002AA00);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_depth(void **state)
@@ -456,10 +456,10 @@ static void aaf_set_field_depth(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.format_specific) == 0x000000A5);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.packet_info) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.packet_info == 0);
 }
 
 static void aaf_set_field_data_len(void **state)
@@ -471,10 +471,10 @@ static void aaf_set_field_data_len(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.packet_info) == 0xAAAA0000);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
 }
 
 static void aaf_set_field_sp(void **state)
@@ -486,10 +486,10 @@ static void aaf_set_field_sp(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.packet_info) == 0x00001000);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
 }
 
 static void aaf_set_field_evt(void **state)
@@ -501,10 +501,10 @@ static void aaf_set_field_evt(void **state)
 
 	assert_int_equal(res, 0);
 	assert_true(ntohl(pdu.packet_info) == 0x00000A00);
-	assert_true(ntohl(pdu.subtype_data) == 0);
-	assert_true(ntohl(pdu.stream_id) == 0);
-	assert_true(ntohl(pdu.avtp_time) == 0);
-	assert_true(ntohl(pdu.format_specific) == 0);
+	assert_true(pdu.subtype_data == 0);
+	assert_true(pdu.stream_id == 0);
+	assert_true(pdu.avtp_time == 0);
+	assert_true(pdu.format_specific == 0);
 }
 
 static void aaf_pdu_init_null_pdu(void **state)
