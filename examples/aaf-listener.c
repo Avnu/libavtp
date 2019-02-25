@@ -171,7 +171,7 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 	}
 	if (val32 != AVTP_SUBTYPE_AAF) {
 		fprintf(stderr, "Subtype mismatch: expected %u, got %u\n",
-						AVTP_FIELD_SUBTYPE, val32);
+						AVTP_SUBTYPE_AAF, val32);
 		return false;
 	}
 
@@ -203,8 +203,8 @@ static bool is_valid_packet(struct avtp_stream_pdu *pdu)
 		return false;
 	}
 	if (val64 != AVTP_AAF_PCM_SP_NORMAL) {
-		fprintf(stderr, "tv mismatch: expected %u, got %" PRIu64 "\n",
-								1, val64);
+		fprintf(stderr, "sp mismatch: expected %u, got %" PRIu64 "\n",
+						AVTP_AAF_PCM_SP_NORMAL, val64);
 		return false;
 	}
 
