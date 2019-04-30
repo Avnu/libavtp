@@ -50,3 +50,7 @@ example application run `$ ninja -C build <example name>`.
 
 Information about what exactly each example application does and how it works
 is provided in the beginning of the .c file from each application.
+
+# Security issues
+
+Please report any security issues with this code to https://www.intel.com/security
