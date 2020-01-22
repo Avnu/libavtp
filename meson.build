@@ -33,7 +33,7 @@ pkg.generate(
 	name: 'avtp',
 	description: 'AVTP packetization library',
 	version: meson.project_version(),
-	url: 'github.com/AVnu/OpenAvnu',
+	url: 'github.com/AVnu/libavtp',
 	libraries: avtp_lib,
 )
 
