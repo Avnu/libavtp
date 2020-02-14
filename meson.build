@@ -20,6 +20,11 @@ avtp_lib = library(
 	install: true,
 )
 
+avtp_dep = declare_dependency(
+	link_with: avtp_lib,
+	include_directories: include_directories('include'),
+)
+
 install_headers(
 	'include/avtp.h',
 	'include/avtp_aaf.h',
