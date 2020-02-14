@@ -42,67 +42,75 @@ pkg.generate(
 	libraries: avtp_lib,
 )
 
-test_avtp = executable(
-	'test-avtp',
-	'unit/test-avtp.c',
-	include_directories: include_directories('include'),
-	link_with: avtp_lib,
-	dependencies: dependency('cmocka'),
-	build_by_default: false,
-)
+if get_option('tests') == 'disabled'
+	cmocka = disabler()
+else
+	cmocka = dependency('cmocka', required: get_option('tests') == 'enabled')
+endif
 
-test_aaf = executable(
-	'test-aaf',
-	'unit/test-aaf.c',
-	include_directories: include_directories('include'),
-	link_with: avtp_lib,
-	dependencies: dependency('cmocka'),
-	build_by_default: false,
-)
+if cmocka.found()
+	test_avtp = executable(
+		'test-avtp',
+		'unit/test-avtp.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
 
-test_crf = executable(
-	'test-crf',
-	'unit/test-crf.c',
-	include_directories: include_directories('include'),
-	link_with: avtp_lib,
-	dependencies: dependency('cmocka'),
-	build_by_default: false,
-)
+	test_aaf = executable(
+		'test-aaf',
+		'unit/test-aaf.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
 
-test_stream = executable(
-	'test-stream',
-	'unit/test-stream.c',
-	'src/avtp_stream.c',
-	include_directories: include_directories('include', 'src'),
-	link_with: avtp_lib,
-	dependencies: dependency('cmocka'),
-	build_by_default: false,
-)
+	test_crf = executable(
+		'test-crf',
+		'unit/test-crf.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
 
-test_cvf = executable(
-	'test-cvf',
-	'unit/test-cvf.c',
-	include_directories: include_directories('include'),
-	link_with: avtp_lib,
-	dependencies: dependency('cmocka'),
-	build_by_default: false,
-)
+	test_stream = executable(
+		'test-stream',
+		'unit/test-stream.c',
+		'src/avtp_stream.c',
+		include_directories: include_directories('include', 'src'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
 
-test_ieciidc = executable(
-	'test-ieciidc',
-	'unit/test-ieciidc.c',
-	include_directories: include_directories('include'),
-	link_with: avtp_lib,
-	dependencies: dependency('cmocka'),
-	build_by_default: false,
-)
+	test_cvf = executable(
+		'test-cvf',
+		'unit/test-cvf.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
 
-test('AVTP API', test_avtp)
-test('Stream API', test_stream)
-test('AAF API', test_aaf)
-test('CRF API', test_crf)
-test('CVF API', test_cvf)
-test('IEC61883/IIDC API', test_ieciidc)
+	test_ieciidc = executable(
+		'test-ieciidc',
+		'unit/test-ieciidc.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
+
+	test('AVTP API', test_avtp)
+	test('Stream API', test_stream)
+	test('AAF API', test_aaf)
+	test('CRF API', test_crf)
+	test('CVF API', test_cvf)
+	test('IEC61883/IIDC API', test_ieciidc)
+endif
 
 cc = meson.get_compiler('c')
 mdep = cc.find_library('m', required : false)
