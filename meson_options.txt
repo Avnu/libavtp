@@ -1,0 +1,7 @@
+# Port to 'feature' once we depend on meson 0.47.0
+option(
+    'tests',
+    type : 'combo',
+    value : 'auto',
+    choices : ['enabled', 'disabled', 'auto'],
+    description : 'Build unit test libraries')
