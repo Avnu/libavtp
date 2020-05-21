@@ -126,8 +126,9 @@ int avtp_stream_pdu_get(const struct avtp_stream_pdu *pdu,
 static int set_field_value(struct avtp_stream_pdu *pdu,
 				enum avtp_stream_field field, uint64_t val)
 {
-	uint32_t *ptr, bitmap, mask;
+	uint32_t bitmap, mask;
 	uint8_t shift;
+	void *ptr;
 
 	switch (field) {
 	case AVTP_STREAM_FIELD_SV:
@@ -164,11 +165,11 @@ static int set_field_value(struct avtp_stream_pdu *pdu,
 		return -EINVAL;
 	}
 
-	bitmap = ntohl(*ptr);
+	bitmap = get_unaligned_be32(ptr);
 
 	BITMAP_SET_VALUE(bitmap, val, mask, shift);
 
-	*ptr = htonl(bitmap);
+	put_unaligned_be32(bitmap, ptr);
 
 	return 0;
 }
