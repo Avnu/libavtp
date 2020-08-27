@@ -11,6 +11,7 @@ avtp_lib = library(
 	 'src/avtp.c',
 	 'src/avtp_aaf.c',
 	 'src/avtp_crf.c',
+	 'src/avtp_crf_client.c',
 	 'src/avtp_cvf.c',
 	 'src/avtp_ieciidc.c',
 	 'src/avtp_stream.c',
@@ -136,6 +137,16 @@ executable(
 executable(
 	'crf-talker',
 	'examples/crf-talker.c',
+	'examples/common.c',
+	include_directories: include_directories('include'),
+	link_with: avtp_lib,
+	dependencies : mdep,
+	build_by_default: false,
+)
+
+executable(
+	'crf-daemon',
+	'examples/crf-daemon.c',
 	'examples/common.c',
 	include_directories: include_directories('include'),
 	link_with: avtp_lib,
