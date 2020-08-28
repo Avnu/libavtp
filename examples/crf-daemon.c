@@ -27,9 +27,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+#include <inttypes.h>
+#include <argp.h>
+#include <arpa/inet.h>
+#include <linux/if.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -37,7 +44,23 @@
 #include <sys/time.h>
 #include <errno.h>
 
+#include "avtp.h"
+#include "avtp_crf.h"
 #include "avtp_crf_daemon.h"
+#include "examples/common.h"
+
+#define NSEC_PER_SEC		1000000000ULL
+
+#define CRF_STREAM_ID		0xAABBCCDDEEFF0002
+/* Values based on Spec 1722 Table 28 recommendation. */
+#define CRF_SAMPLE_RATE		48000
+#define CRF_TIMESTAMPS_PER_SEC	300
+#define MCLKLIST_TS_PER_CRF	(CRF_SAMPLE_RATE / CRF_TIMESTAMPS_PER_SEC)
+#define MCLK_PERIOD		(NSEC_PER_SEC / CRF_TIMESTAMPS_PER_SEC)
+#define TIMESTAMPS_PER_PKT	6
+#define CRF_DATA_LEN		(sizeof(uint64_t) * TIMESTAMPS_PER_PKT)
+#define CRF_PDU_SIZE		(sizeof(struct avtp_crf_pdu) + CRF_DATA_LEN)
+
 
 #define ARRAY_SIZE(a)	( sizeof(a) / sizeof((a)[0]) )
 
@@ -49,6 +72,41 @@ typedef struct {
 	avtp_crf_daemon_event_type_t event_type;
 
 } crf_daemon_client_t;
+
+static uint8_t crf_seq_num;
+static char ifname[IFNAMSIZ];
+static uint8_t crf_macaddr[ETH_ALEN];
+
+static const struct argp_option options[] = {
+	{"crf-addr", 'c', "MACADDR", 0, "CRF Stream Destination MAC address" },
+	{"ifname", 'i', "IFNAME", 0, "Network Interface" },
+	{ 0 }
+};
+
+static error_t parser(int key, char *arg, struct argp_state *state)
+{
+	int res;
+
+	switch (key) {
+	case 'c':
+		res = sscanf(arg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+			&crf_macaddr[0], &crf_macaddr[1], &crf_macaddr[2],
+			&crf_macaddr[3], &crf_macaddr[4], &crf_macaddr[5]);
+		if (res != 6) {
+			fprintf(stderr, "Invalid CRF address\n");
+			exit(EXIT_FAILURE);
+		}
+
+		break;
+	case 'i':
+		strncpy(ifname, arg, sizeof(ifname) - 1);
+		break;
+	}
+
+	return 0;
+}
+
+static struct argp argp = { options, parser };
 
 
 static void client_close(struct pollfd* const pfd, crf_daemon_client_t* const client)
@@ -74,6 +132,204 @@ static int mclk_enqueue_ts(const int fd, const uint64_t timestamp)
 	}
 
 	return 0;
+}
+
+/* This routine generates media clock timestamps using timestamps from CRF
+ * stream.
+ */
+static int recover_mclk(struct avtp_crf_pdu *pdu, const int fd)
+{
+	int res, idx;
+	uint64_t ts_mclk, ts_crf;
+
+	/* To recover the media clock we consider only the first timestamp from
+	 * CRF PDU since the others timestamps are incremented monotonically
+	 * from the first timestamp (see Section 10.7 from IEEE 1722-2016
+	 * spec).
+	 */
+	ts_crf = be64toh(pdu->crf_data[0]);
+
+	for (idx = 0; idx < MCLKLIST_TS_PER_CRF; idx++) {
+		ts_mclk = ts_crf + (idx * MCLK_PERIOD);
+		res = mclk_enqueue_ts(fd, ts_mclk);
+		if (res < 0)
+			return res;
+	}
+
+	return 0;
+}
+
+static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
+{
+	int res;
+	uint32_t val32;
+	uint64_t val64;
+	struct avtp_common_pdu *common = (struct avtp_common_pdu *) pdu;
+
+	res = avtp_pdu_get(common, AVTP_FIELD_SUBTYPE, &val32);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF subtype field: %d\n", res);
+		return false;
+	}
+	if (val32 != AVTP_SUBTYPE_CRF)
+		return false;
+
+	res = avtp_pdu_get(common, AVTP_FIELD_VERSION, &val32);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF version field: %d\n", res);
+		return false;
+	}
+	if (val32 != 0) {
+		fprintf(stderr, "CRF: Version mismatch: expected %u, got %u\n",
+								0, val32);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_SV, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF sv field: %d\n", res);
+		return false;
+	}
+	if (val64 != 1) {
+		fprintf(stderr, "CRF: sv mismatch: expected %u, got %" PRIu64 "\n",
+								1, val64);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_FS, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF fs field: %d\n", res);
+		return false;
+	}
+	if (val64 != 0) {
+		fprintf(stderr, "CRF: fs mismatch: expected %u, got %" PRIu64 "\n",
+								0, val64);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_SEQ_NUM, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF sequence num field: %d\n",
+									res);
+		return false;
+	}
+	if (val64 != crf_seq_num) {
+		/* If we have a sequence number mismatch, we simply log the
+		 * issue and continue to process the packet. We don't want to
+		 * invalidate it since it is a valid packet after all.
+		 */
+		fprintf(stderr, "CRF: Sequence number mismatch: expected %u, got %" PRIu64 "\n",
+							crf_seq_num, val64);
+
+		crf_seq_num = val64;
+	}
+
+	crf_seq_num++;
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_TYPE, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF format field: %d\n", res);
+		return false;
+	}
+	if (val64 != AVTP_CRF_TYPE_AUDIO_SAMPLE) {
+		fprintf(stderr, "CRF: Format mismatch: expected %u, got %" PRIu64 "\n",
+					AVTP_CRF_TYPE_AUDIO_SAMPLE, val64);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_STREAM_ID, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF stream ID field: %d\n",
+									res);
+		return false;
+	}
+	if (val64 != CRF_STREAM_ID) {
+		fprintf(stderr, "CRF: Stream ID mismatch: expected %" PRIu64 ", got %" PRIu64 "\n",
+							CRF_STREAM_ID, val64);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_PULL, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF multiplier modifier field: %d\n",
+									res);
+		return false;
+	}
+	if (val64 != AVTP_CRF_PULL_MULT_BY_1) {
+		fprintf(stderr, "CRF Pull mismatch: expected %u, got %" PRIu64 "\n",
+					AVTP_CRF_PULL_MULT_BY_1, val64);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_BASE_FREQ, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF base frequency field: %d\n",
+									res);
+		return false;
+	}
+	if (val64 != CRF_SAMPLE_RATE) {
+		fprintf(stderr, "CRF Base frequency: expected %u, got %" PRIu64 "\n",
+						CRF_SAMPLE_RATE, val64);
+		return false;
+	}
+
+	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_CRF_DATA_LEN, &val64);
+	if (res < 0) {
+		fprintf(stderr, "Failed to get CRF data length field: %d\n",
+									res);
+		return false;
+	}
+	if (val64 != CRF_DATA_LEN) {
+		fprintf(stderr, "CRF Data length mismatch: expected %zu, got %" PRIu64 "\n",
+							CRF_DATA_LEN, val64);
+		return false;
+	}
+
+	return true;
+}
+
+static int handle_crf_pdu(struct avtp_crf_pdu *pdu, struct pollfd fds[], crf_daemon_client_t clients[], const int clients_max)
+{
+	if (!is_valid_crf_pdu(pdu))
+		return 0;
+
+	int ret = 0;
+	for (int i=0; i<clients_max; i++) {
+		crf_daemon_client_t* client = &clients[i];
+		if (client->fd < 0)
+			continue;
+		if (recover_mclk(pdu, client->fd) < 0) {
+			ret = -client->fd;
+			client_close(&fds[i], client);
+		}
+	}
+
+	return ret;
+}
+
+static int process_crf(const int crf_fd, struct pollfd fds[], crf_daemon_client_t clients[],
+		       const int clients_max)
+{
+	ssize_t n;
+	struct avtp_crf_pdu *pdu = alloca(CRF_PDU_SIZE);
+
+	memset(pdu, 0, CRF_PDU_SIZE);
+
+	n = recv(crf_fd, pdu, CRF_PDU_SIZE, 0);
+	if (n < 0) {
+		perror("Failed to receive data");
+		return -1;
+	}
+
+	/* The protocol type from rx socket is set to ETH_P_ALL so we receive
+	 * non-AVTP packets as well. In order to filter out those packets, we
+	 * check the number of bytes received. If it doesn't match the CRF pdu
+	 * size we drop the packet.
+	 */
+	if (n != CRF_PDU_SIZE)
+		return 0;
+
+	return handle_crf_pdu(pdu, fds, clients, clients_max);
 }
 
 
@@ -117,6 +373,19 @@ static int process_request(const int fd, crf_daemon_client_t* const client)
 
 int main (int argc, char *argv[])
 {
+	argp_parse(&argp, argc, argv, 0, NULL, NULL);
+
+
+	/* In case this example is running on the same host where crf-talker is
+	 * running, we set protocol type to ETH_P_ALL to allow CRF traffic to
+	 * loop back.
+	 */
+	const int crf_fd = create_listener_socket(ifname, crf_macaddr, ETH_P_ALL);
+	if (crf_fd < 0) {
+		perror("Failed to open socket");
+		return -1;
+	}
+
 	const int server_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (server_fd < 0) {
 		perror("socket() failed");
@@ -163,6 +432,8 @@ int main (int argc, char *argv[])
 		fds[i].fd = -1;
 	fds[0].fd = server_fd;
 	fds[0].events = POLLIN;
+	fds[1].fd = crf_fd;
+	fds[1].events = POLLIN;
 	nfds_t nfds = EXTRA_FDS;
 
 	crf_daemon_client_t clients[MAX_CLIENTS];
@@ -204,6 +475,9 @@ int main (int argc, char *argv[])
 				if (new_sd < 0 && errno != EWOULDBLOCK) {
 					perror("accept() failed");
 				}
+			} else if (fds[i].fd == crf_fd) {
+				const int clients_max = nfds - EXTRA_FDS;
+				process_crf(crf_fd, &fds[EXTRA_FDS], clients, clients_max);
 			} else {
 				crf_daemon_client_t* const client = &clients[i - EXTRA_FDS];
 				if (process_request(fds[i].fd, client) < 0) {

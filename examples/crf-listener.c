@@ -98,7 +98,8 @@
 #include <inttypes.h>
 
 #include "avtp.h"
-#include "avtp_crf.h"
+#include "avtp_crf.h" // TODO remove this include
+#include "avtp_crf_daemon.h"
 #include "avtp_aaf.h"
 #include "examples/common.h"
 
@@ -110,27 +111,18 @@
 #define AAF_PDU_SIZE		(sizeof(struct avtp_stream_pdu) + AAF_DATA_LEN)
 #define AAF_SAMPLE_RATE 	48000
 
-#define CRF_STREAM_ID		0xAABBCCDDEEFF0002
-/* Values based on Spec 1722 Table 28 recommendation. */
-#define CRF_SAMPLE_RATE 	48000
-#define CRF_TIMESTAMPS_PER_SEC	300
+// TODO remove
 #define TIMESTAMPS_PER_PKT	6
 #define CRF_DATA_LEN		(sizeof(uint64_t) * TIMESTAMPS_PER_PKT)
 #define CRF_PDU_SIZE		(sizeof(struct avtp_crf_pdu) + CRF_DATA_LEN)
 
 #define MAX_PDU_SIZE		MAX(AAF_PDU_SIZE, CRF_PDU_SIZE)
-#define TIME_PERIOD_NS		((double)NSEC_PER_SEC / CRF_SAMPLE_RATE)
+#define TIME_PERIOD_NS		((double)NSEC_PER_SEC / AAF_SAMPLE_RATE)
 #define AAF_PERIOD		(NSEC_PER_SEC * AAF_NUM_SAMPLES / AAF_SAMPLE_RATE)
 #define MCLK_PERIOD		AAF_PERIOD
-#define MCLKLIST_TS_PER_CRF	(CRF_SAMPLE_RATE / CRF_TIMESTAMPS_PER_SEC)
 
 #define NSEC_PER_SEC		1000000000ULL
 #define NSEC_PER_MSEC		1000000ULL
-
-struct media_clock_entry {
-	STAILQ_ENTRY(media_clock_entry) mclk_entries;
-	uint64_t timestamp;
-};
 
 static enum {
 	MODE_TALKER,
@@ -138,20 +130,16 @@ static enum {
 } mode;
 
 static char ifname[IFNAMSIZ];
-static uint8_t crf_macaddr[ETH_ALEN];
 static uint8_t aaf_macaddr[ETH_ALEN];
 static int priority = -1;
 static int mtt;
 static bool prev_state;
 static bool first_aaf_pdu = true;
 static bool need_mclk_lookup = true;
-static uint8_t crf_seq_num;
 static uint8_t aaf_seq_num;
 static uint64_t prev_mclk_timestamp, rounded_mtt;
-static STAILQ_HEAD(timestamp_queue, media_clock_entry) mclk_timestamps;
 
 static struct argp_option options[] = {
-	{"crf-addr", 'c', "MACADDR", 0, "CRF Stream Destination MAC address" },
 	{"aaf-addr", 'a', "MACADDR", 0, "AAF Stream Destination MAC address" },
 	{"ifname", 'i', "IFNAME", 0, "Network Interface" },
 	{"prio", 'p', "NUM", 0, "SO_PRIORITY to be set in AAF stream" },
@@ -165,16 +153,6 @@ static error_t parser(int key, char *arg, struct argp_state *state)
 	int res;
 
 	switch (key) {
-	case 'c':
-		res = sscanf(arg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-			&crf_macaddr[0], &crf_macaddr[1], &crf_macaddr[2],
-			&crf_macaddr[3], &crf_macaddr[4], &crf_macaddr[5]);
-		if (res != 6) {
-			fprintf(stderr, "Invalid CRF address\n");
-			exit(EXIT_FAILURE);
-		}
-
-		break;
 	case 'a':
 		res = sscanf(arg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
 			&aaf_macaddr[0], &aaf_macaddr[1], &aaf_macaddr[2],
@@ -211,44 +189,56 @@ static error_t parser(int key, char *arg, struct argp_state *state)
 
 static struct argp argp = { options, parser };
 
-static uint64_t mclk_dequeue_ts(void)
+static uint64_t mclk_dequeue_ts(const int crf_fd)
 {
-	uint64_t mclk_timestamp;
-	struct media_clock_entry *mclk_entry;
+	uint64_t ts_mclk = 0;
+	do {
+		struct avtp_crf_daemon_resp resp;
+		if (recv(crf_fd, &resp, sizeof(resp), 0) != sizeof(resp)) {
+			perror("Receiving response from CRF daemon failed. Retrying...");
+			continue;
+		}
 
-	mclk_entry = STAILQ_FIRST(&mclk_timestamps);
-	mclk_timestamp = mclk_entry->timestamp;
-	STAILQ_REMOVE_HEAD(&mclk_timestamps, mclk_entries);
-	free(mclk_entry);
+		if (resp.type != AVTP_CRF_DMN_RESP_EVT) {
+			printf("Received wrong response (%d) from CRF daemon. Retrying...",
+			       resp.type);
+			continue;
+		}
 
-	return mclk_timestamp;
+		ts_mclk = resp.evt.timestamp;
+
+		if (mode == MODE_TALKER) {
+			/* If we are operating in talker mode, the max transit
+			 * time is added to the recovered timestamp, rounding
+			 * it up to the nearest multiple fo the media clock.
+			 */
+			ts_mclk += rounded_mtt;
+		}
+
+		/* If the recovered timestamp is less than the
+		 * timestamp from the last AAF pdu received, we discard
+		 * it. This situation happens when the CRF pdu is
+		 * received late and the media clock has already
+		 * freewheeled.
+		 */
+	} while (ts_mclk <= prev_mclk_timestamp);
+
+	return ts_mclk;
 }
 
-static int mclk_enqueue_ts(uint64_t ts)
-{
-	struct media_clock_entry *mclk_entry;
-
-	mclk_entry = malloc(sizeof(*mclk_entry));
-	if (!mclk_entry) {
-		fprintf(stderr, "Failed to allocate memory\n");
-		return -1;
-	}
-
-	mclk_entry->timestamp = ts;
-	STAILQ_INSERT_TAIL(&mclk_timestamps, mclk_entry, mclk_entries);
-
-	return 0;
-}
-
-static uint64_t get_next_mclk_timestamp(void)
+static uint64_t get_next_mclk_timestamp(const int crf_fd)
 {
 	uint64_t mclk_timestamp;
 
-	if (STAILQ_EMPTY(&mclk_timestamps)) {
+	struct pollfd fds;
+	fds.fd = crf_fd;
+	fds.events = POLLIN;
+	if (poll(&fds, 1, 0) > 0 && fds.revents == POLLIN) {
+		mclk_timestamp = mclk_dequeue_ts(crf_fd);
+	} else {
+		// TODO crf-daemon should guarantee to sent valid timestamps always in time
 		mclk_timestamp = prev_mclk_timestamp + MCLK_PERIOD;
 		need_mclk_lookup = true;
-	} else {
-		mclk_timestamp = mclk_dequeue_ts();
 	}
 
 	prev_mclk_timestamp = mclk_timestamp;
@@ -256,143 +246,14 @@ static uint64_t get_next_mclk_timestamp(void)
 	return mclk_timestamp;
 }
 
-static uint64_t mclk_lookup(uint32_t avtp_time)
+static uint64_t mclk_lookup(const int crf_fd, uint32_t avtp_time)
 {
-	uint64_t mclk_timestamp = get_next_mclk_timestamp();
+	uint64_t mclk_timestamp = get_next_mclk_timestamp(crf_fd);
 
 	while (mclk_timestamp % (1ULL << 32) != avtp_time)
-		mclk_timestamp = get_next_mclk_timestamp();
+		mclk_timestamp = get_next_mclk_timestamp(crf_fd);
 
 	return mclk_timestamp;
-}
-
-static bool is_valid_crf_pdu(struct avtp_crf_pdu *pdu)
-{
-	int res;
-	uint32_t val32;
-	uint64_t val64;
-	struct avtp_common_pdu *common = (struct avtp_common_pdu *) pdu;
-
-	res = avtp_pdu_get(common, AVTP_FIELD_SUBTYPE, &val32);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF subtype field: %d\n", res);
-		return false;
-	}
-	if (val32 != AVTP_SUBTYPE_CRF)
-		return false;
-
-	res = avtp_pdu_get(common, AVTP_FIELD_VERSION, &val32);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF version field: %d\n", res);
-		return false;
-	}
-	if (val32 != 0) {
-		fprintf(stderr, "CRF: Version mismatch: expected %u, got %u\n",
-								0, val32);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_SV, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF sv field: %d\n", res);
-		return false;
-	}
-	if (val64 != 1) {
-		fprintf(stderr, "CRF: sv mismatch: expected %u, got %" PRIu64 "\n",
-								1, val64);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_FS, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF fs field: %d\n", res);
-		return false;
-	}
-	if (val64 != 0) {
-		fprintf(stderr, "CRF: fs mismatch: expected %u, got %" PRIu64 "\n",
-								0, val64);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_SEQ_NUM, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF sequence num field: %d\n",
-									res);
-		return false;
-	}
-	if (val64 != crf_seq_num) {
-		/* If we have a sequence number mismatch, we simply log the
-		 * issue and continue to process the packet. We don't want to
-		 * invalidate it since it is a valid packet after all.
-		 */
-		fprintf(stderr, "CRF: Sequence number mismatch: expected %u, got %" PRIu64 "\n",
-							crf_seq_num, val64);
-
-		crf_seq_num = val64;
-	}
-
-	crf_seq_num++;
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_TYPE, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF format field: %d\n", res);
-		return false;
-	}
-	if (val64 != AVTP_CRF_TYPE_AUDIO_SAMPLE) {
-		fprintf(stderr, "CRF: Format mismatch: expected %u, got %" PRIu64 "\n",
-					AVTP_CRF_TYPE_AUDIO_SAMPLE, val64);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_STREAM_ID, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF stream ID field: %d\n",
-									res);
-		return false;
-	}
-	if (val64 != CRF_STREAM_ID) {
-		fprintf(stderr, "CRF: Stream ID mismatch: expected %" PRIu64 ", got %" PRIu64 "\n",
-							CRF_STREAM_ID, val64);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_PULL, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF multiplier modifier field: %d\n",
-									res);
-		return false;
-	}
-	if (val64 != AVTP_CRF_PULL_MULT_BY_1) {
-		fprintf(stderr, "CRF Pull mismatch: expected %u, got %" PRIu64 "\n",
-					AVTP_CRF_PULL_MULT_BY_1, val64);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_BASE_FREQ, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF base frequency field: %d\n",
-									res);
-		return false;
-	}
-	if (val64 != CRF_SAMPLE_RATE) {
-		fprintf(stderr, "CRF Base frequency: expected %u, got %" PRIu64 "\n",
-						CRF_SAMPLE_RATE, val64);
-		return false;
-	}
-
-	res = avtp_crf_pdu_get(pdu, AVTP_CRF_FIELD_CRF_DATA_LEN, &val64);
-	if (res < 0) {
-		fprintf(stderr, "Failed to get CRF data length field: %d\n",
-									res);
-		return false;
-	}
-	if (val64 != CRF_DATA_LEN) {
-		fprintf(stderr, "CRF Data length mismatch: expected %zu, got %" PRIu64 "\n",
-							CRF_DATA_LEN, val64);
-		return false;
-	}
-
-	return true;
 }
 
 static bool is_valid_aaf_pdu(struct avtp_stream_pdu *pdu)
@@ -576,7 +437,7 @@ static int init_aaf_pdu(struct avtp_stream_pdu *pdu)
 	return 0;
 }
 
-static int aaf_talker_tx_timeout(int fd_timer, int fd_sk,
+static int aaf_talker_tx_timeout(const int crf_fd, int fd_timer, int fd_sk,
 						const struct sockaddr_ll *addr,
 						struct avtp_stream_pdu *pdu)
 {
@@ -592,7 +453,7 @@ static int aaf_talker_tx_timeout(int fd_timer, int fd_sk,
 	}
 
 	while (expirations--) {
-		avtp_time = get_next_mclk_timestamp();
+		avtp_time = get_next_mclk_timestamp(crf_fd);
 
 		res = avtp_aaf_pdu_set(pdu, AVTP_AAF_FIELD_TIMESTAMP,
 								avtp_time);
@@ -615,49 +476,6 @@ static int aaf_talker_tx_timeout(int fd_timer, int fd_sk,
 			fprintf(stderr, "AAF: wrote %zd bytes, expected %zd\n",
 							n, AAF_PDU_SIZE);
 		}
-	}
-
-	return 0;
-}
-
-/* This routine generates media clock timestamps using timestamps from CRF
- * stream.
- */
-static int recover_mclk(struct avtp_crf_pdu *pdu)
-{
-	int res, idx;
-	uint64_t ts_mclk, ts_crf;
-
-	/* To recover the media clock we consider only the first timestamp from
-	 * CRF PDU since the others timestamps are incremented monotonically
-	 * from the first timestamp (see Section 10.7 from IEEE 1722-2016
-	 * spec).
-	 */
-	ts_crf = be64toh(pdu->crf_data[0]);
-
-	for (idx = 0; idx < MCLKLIST_TS_PER_CRF; idx++) {
-		ts_mclk = ts_crf + (idx * MCLK_PERIOD);
-
-		if (mode == MODE_TALKER) {
-			/* If we are operating in talker mode, the max transit
-			 * time is added to the recovered timestamp, rounding
-			 * it up to the nearest multiple fo the media clock.
-			 */
-			ts_mclk += rounded_mtt;
-		}
-
-		if (ts_mclk <= prev_mclk_timestamp)
-			/* If the recovered timestamp is less than the
-			 * timestamp from the last AAF pdu received, we discard
-			 * it. This situation happens when the CRF pdu is
-			 * received late and the media clock has already
-			 * freewheeled.
-			 */
-			continue;
-
-		res = mclk_enqueue_ts(ts_mclk);
-		if (res < 0)
-			return res;
 	}
 
 	return 0;
@@ -687,15 +505,7 @@ static int is_ts_aligned(uint32_t mclk_ts, uint32_t avtp_ts)
 	return true;
 }
 
-static int handle_crf_pdu(struct avtp_crf_pdu *pdu)
-{
-	if (!is_valid_crf_pdu(pdu))
-		return 0;
-
-	return recover_mclk(pdu);
-}
-
-static int handle_aaf_pdu(struct avtp_stream_pdu *pdu)
+static int handle_aaf_pdu(const int crf_fd, struct avtp_stream_pdu *pdu)
 {
 	int res;
 	bool state;
@@ -713,10 +523,10 @@ static int handle_aaf_pdu(struct avtp_stream_pdu *pdu)
 	avtp_time = val;
 
 	if (need_mclk_lookup) {
-		mclk_time = mclk_lookup(avtp_time);
+		mclk_time = mclk_lookup(crf_fd, avtp_time);
 		need_mclk_lookup = false;
 	} else {
-		mclk_time = get_next_mclk_timestamp();
+		mclk_time = get_next_mclk_timestamp(crf_fd);
 	}
 
 	state = is_ts_aligned(mclk_time, avtp_time);
@@ -731,55 +541,30 @@ static int handle_aaf_pdu(struct avtp_stream_pdu *pdu)
 	return 0;
 }
 
-static int aaf_talker_recv_pdu(int fd_sk, int fd_timer)
+static int aaf_talker_start(int crf_fd, int fd_timer)
 {
-	int res;
-	ssize_t n;
-	struct avtp_crf_pdu *pdu = alloca(CRF_PDU_SIZE);
-
-	memset(pdu, 0, CRF_PDU_SIZE);
-
-	n = recv(fd_sk, pdu, CRF_PDU_SIZE, 0);
-	if (n < 0) {
-		perror("Failed to receive data");
-		return -1;
-	}
-
-	/* The protocol type from rx socket is set to ETH_P_ALL so we receive
-	 * non-AVTP packets as well. In order to filter out those packets, we
-	 * check the number of bytes received. If it doesn't match the CRF pdu
-	 * size we drop the packet.
-	 */
-	if (n != CRF_PDU_SIZE)
-		return 0;
-
-	res = handle_crf_pdu(pdu);
-	if (res < 0)
-		return -1;
-
 	/* Arm the timer for the first time to start sending AAF stream. */
-	if (first_aaf_pdu) {
-		struct itimerspec itspec = { 0 };
-		uint64_t ts = mclk_dequeue_ts();
+	struct itimerspec itspec = { 0 };
+	uint64_t ts = mclk_dequeue_ts(crf_fd);
 
-		first_aaf_pdu = false;
+	first_aaf_pdu = false;
 
-		itspec.it_value.tv_sec = ts / NSEC_PER_SEC;
-		itspec.it_value.tv_nsec = ts % NSEC_PER_SEC;
-		itspec.it_interval.tv_sec = 0;
-		itspec.it_interval.tv_nsec = AAF_PERIOD;
-		res = timerfd_settime(fd_timer, TFD_TIMER_ABSTIME, &itspec,
-									NULL);
-		if (res < 0) {
-			perror("Failed to set timer");
-			return -1;
-		}
+	itspec.it_value.tv_sec = ts / NSEC_PER_SEC;
+	itspec.it_value.tv_nsec = ts % NSEC_PER_SEC;
+	itspec.it_interval.tv_sec = 0;
+	itspec.it_interval.tv_nsec = AAF_PERIOD;
+	const int res = timerfd_settime(fd_timer, TFD_TIMER_ABSTIME, &itspec,
+			      NULL);
+	if (res < 0) {
+		perror("Failed to set timer");
+		return -1;
 	}
 	return 0;
 }
 
-static int aaf_listener_recv_pdu(int fd)
+static int aaf_listener_recv_pdu(const int crf_fd, const int aaf_fd)
 {
+	// TODO handle only AAF packages
 	int res;
 	ssize_t n;
 	uint32_t val;
@@ -788,7 +573,7 @@ static int aaf_listener_recv_pdu(int fd)
 
 	memset(pdu, 0, MAX_PDU_SIZE);
 
-	n = recv(fd, pdu, MAX_PDU_SIZE, 0);
+	n = recv(aaf_fd, pdu, MAX_PDU_SIZE, 0);
 	if (n < 0) {
 		perror("Failed to receive data");
 		return -1;
@@ -809,62 +594,15 @@ static int aaf_listener_recv_pdu(int fd)
 	}
 
 	switch (val) {
-	case AVTP_SUBTYPE_CRF:
-		res = handle_crf_pdu(pdu);
-		break;
 	case AVTP_SUBTYPE_AAF:
-		res = handle_aaf_pdu(pdu);
+		res = handle_aaf_pdu(crf_fd, pdu);
 		break;
 	}
 
 	return res;
 }
 
-static int setup_rx_socket(void)
-{
-	int res, fd;
-	struct ifreq req = {0};
-	struct packet_mreq mreq = {0};
-
-	/* In case this example is running on the same host where crf-talker is
-	 * running, we set protocol type to ETH_P_ALL to allow CRF traffic to
-	 * loop back.
-	 */
-	fd = create_listener_socket(ifname, crf_macaddr, ETH_P_ALL);
-	if (fd < 0) {
-		perror("Failed to open socket");
-		return -1;
-	}
-
-	if (mode == MODE_LISTENER) {
-		snprintf(req.ifr_name, sizeof(req.ifr_name), "%s", ifname);
-		res = ioctl(fd, SIOCGIFINDEX, &req);
-		if (res < 0) {
-			perror("Failed to get interface index");
-			goto err;
-		}
-
-		mreq.mr_ifindex = req.ifr_ifindex;
-		mreq.mr_type = PACKET_MR_MULTICAST;
-		mreq.mr_alen = ETH_ALEN;
-		memcpy(&mreq.mr_address, aaf_macaddr, ETH_ALEN);
-
-		res = setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP, &mreq,
-						sizeof(struct packet_mreq));
-		if (res < 0) {
-			perror("Couldn't add membership for AAF stream");
-			goto err;
-		}
-	}
-
-	return fd;
-
-err:
-	close(fd);
-	return -1;
-}
-
-static int aaf_talker(int fd_rx)
+static int aaf_talker(int crf_fd)
 {
 	int res, fd_tx, fd_timer;
 	struct pollfd poll_fd[2];
@@ -910,7 +648,7 @@ static int aaf_talker(int fd_rx)
 		goto fd_timer_close;
 	memset(pdu->avtp_payload, 0, AAF_DATA_LEN);
 
-	poll_fd[0].fd = fd_rx;
+	poll_fd[0].fd = crf_fd;
 	poll_fd[0].events = POLLIN;
 	poll_fd[1].fd = fd_timer;
 	poll_fd[1].events = POLLIN;
@@ -923,13 +661,15 @@ static int aaf_talker(int fd_rx)
 		}
 
 		if (poll_fd[0].revents & POLLIN) {
-			res = aaf_talker_recv_pdu(fd_rx, fd_timer);
+			/* only wait for first message from CRF daemon to start the timer */
+			res = aaf_talker_start(crf_fd, fd_timer);
 			if (res < 0)
 				goto fd_timer_close;
+			poll_fd[0].fd = -1;
 		}
 
 		if (poll_fd[1].revents & POLLIN) {
-			res = aaf_talker_tx_timeout(fd_timer, fd_tx, &sk_addr,
+			res = aaf_talker_tx_timeout(crf_fd, fd_timer, fd_tx, &sk_addr,
 									pdu);
 			if (res < 0)
 				goto fd_timer_close;
@@ -947,12 +687,21 @@ fd_tx_close:
 	return 1;
 }
 
-static int aaf_listener(int fd_rx)
+static int aaf_listener(int crf_fd)
 {
 	int res;
+	/* In case this example is running on the same host where crf-talker is
+	 * running, we set protocol type to ETH_P_ALL to allow CRF traffic to
+	 * loop back.
+	 */
+	const int aaf_fd = create_listener_socket(ifname, aaf_macaddr, ETH_P_ALL);
+	if (aaf_fd < 0) {
+		perror("Failed to open socket");
+		return -1;
+	}
 
 	while (1) {
-		res = aaf_listener_recv_pdu(fd_rx);
+		res = aaf_listener_recv_pdu(crf_fd, aaf_fd);
 		if (res < 0)
 			return -1;
 	}
@@ -960,26 +709,23 @@ static int aaf_listener(int fd_rx)
 
 int main(int argc, char *argv[])
 {
-	int fd_rx;
-
 	argp_parse(&argp, argc, argv, 0, NULL, NULL);
 
-	STAILQ_INIT(&mclk_timestamps);
 	rounded_mtt = ceil((double)mtt / MCLK_PERIOD) * MCLK_PERIOD;
 
-	fd_rx = setup_rx_socket();
-	if (fd_rx < 0)
+	const int crf_fd = avtp_crf_daemon_connect(AVTP_CRF_DMN_SOCKET_NAME);
+	if (crf_fd < 0)
 		return 1;
 
 	switch (mode) {
 	case MODE_LISTENER:
-		aaf_listener(fd_rx);
+		aaf_listener(crf_fd);
 		break;
 	case MODE_TALKER:
-		aaf_talker(fd_rx);
+		aaf_talker(crf_fd);
 		break;
 	}
 
-	close(fd_rx);
+	close(crf_fd);
 	return 0;
 }
