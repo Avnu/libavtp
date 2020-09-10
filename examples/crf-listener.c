@@ -628,10 +628,8 @@ static int recover_mclk(struct avtp_crf_pdu *pdu)
 	int res, idx;
 	uint64_t ts_mclk, ts_crf;
 
-	/* To recover the media clock we consider only the first timestamp from
-	 * CRF PDU since the others timestamps are incremented monotonically
-	 * from the first timestamp (see Section 10.7 from IEEE 1722-2016
-	 * spec).
+	/* For simplicity's sake, we consider only the first timestamp from
+	 * CRF PDU to recover the media clock.
 	 */
 	ts_crf = be64toh(pdu->crf_data[0]);
 
