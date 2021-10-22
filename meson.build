@@ -3,6 +3,7 @@ project(
 	'c',
 	version: '0.1.0',
 	license: 'BSD-3-Clause',
+	meson_version: '>=0.46.0',
 )
 
 avtp_lib = library(
@@ -34,12 +35,9 @@ install_headers(
 )
 
 pkg = import('pkgconfig')
-pkg.generate(
-	name: 'avtp',
+pkg.generate(avtp_lib,
 	description: 'AVTP packetization library',
-	version: meson.project_version(),
 	url: 'github.com/AVnu/libavtp',
-	libraries: avtp_lib,
 )
 
 if get_option('tests') == 'disabled'
