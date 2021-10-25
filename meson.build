@@ -97,6 +97,15 @@ if cmocka.found()
 		build_by_default: false,
 	)
 
+	test_rvf = executable(
+		'test-rvf',
+		'unit/test-rvf.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
+
 	test_ieciidc = executable(
 		'test-ieciidc',
 		'unit/test-ieciidc.c',
@@ -111,6 +120,7 @@ if cmocka.found()
 	test('AAF API', test_aaf)
 	test('CRF API', test_crf)
 	test('CVF API', test_cvf)
+	test('RVF API', test_rvf)
 	test('IEC61883/IIDC API', test_ieciidc)
 endif
 
