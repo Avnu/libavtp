@@ -12,6 +12,7 @@ avtp_lib = library(
 	 'src/avtp_aaf.c',
 	 'src/avtp_crf.c',
 	 'src/avtp_cvf.c',
+	 'src/avtp_rvf.c',
 	 'src/avtp_ieciidc.c',
 	 'src/avtp_stream.c',
 	],
@@ -30,6 +31,7 @@ install_headers(
 	'include/avtp_aaf.h',
 	'include/avtp_crf.h',
 	'include/avtp_cvf.h',
+	'include/avtp_rvf.h',
 	'include/avtp_ieciidc.h',
 )
 
