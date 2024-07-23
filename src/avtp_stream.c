@@ -26,6 +26,7 @@
  */
 
 #include <arpa/inet.h>
+#include <endian.h>
 #include <stddef.h>
 
 #include "avtp.h"
