@@ -124,7 +124,7 @@ static error_t parser(int key, char *arg, struct argp_state *state)
 static struct argp argp = { options, parser };
 
 /* Schedule 'pcm_sample' to be presented at time specified by 'tspec'. */
-static int schedule_sample(int fd, struct timespec *tspec, uint8_t *pcm_sample)
+static int schedule_sample(int timer_fd, struct timespec *tspec, uint8_t *pcm_sample)
 {
 	struct sample_entry *entry;
 
@@ -139,20 +139,6 @@ static int schedule_sample(int fd, struct timespec *tspec, uint8_t *pcm_sample)
 	memcpy(entry->pcm_sample, pcm_sample, DATA_LEN);
 
 	STAILQ_INSERT_TAIL(&samples, entry, entries);
-
-	/* If this was the first entry inserted onto the queue, we need to arm
-	 * the timer.
-	 */
-	if (STAILQ_FIRST(&samples) == entry) {
-		int res;
-
-		res = arm_timer(fd, tspec);
-		if (res < 0) {
-			STAILQ_REMOVE(&samples, entry, sample_entry, entries);
-			free(entry);
-			return -1;
-		}
-	}
 
 	return 0;
 }
@@ -333,37 +319,37 @@ static int new_packet(int sk_fd, int timer_fd)
 	return 0;
 }
 
-static int timeout(int fd)
+static int timeout(int timer_fd)
 {
 	int res;
 	ssize_t n;
 	uint64_t expirations;
 	struct sample_entry *entry;
+	struct timespec now;
 
-	n = read(fd, &expirations, sizeof(uint64_t));
+	n = read(timer_fd, &expirations, sizeof(uint64_t));
 	if (n < 0) {
 		perror("Failed to read timerfd");
 		return -1;
 	}
 
-	assert(expirations == 1);
-
-	entry = STAILQ_FIRST(&samples);
-	assert(entry != NULL);
-
-	res = present_data(entry->pcm_sample, DATA_LEN);
-	if (res < 0)
+	if (clock_gettime(CLOCK_REALTIME, &now) < 0) {
+		perror("Failed to get current time");
 		return -1;
+	}
 
-	STAILQ_REMOVE_HEAD(&samples, entries);
-	free(entry);
-
-	if (!STAILQ_EMPTY(&samples)) {
+	while (!STAILQ_EMPTY(&samples)) {
 		entry = STAILQ_FIRST(&samples);
-
-		res = arm_timer(fd, &entry->tspec);
-		if (res < 0)
-			return -1;
+		if ((entry->tspec.tv_sec < now.tv_sec) ||
+			(entry->tspec.tv_sec == now.tv_sec && entry->tspec.tv_nsec <= now.tv_nsec)) {
+			res = present_data(entry->pcm_sample, DATA_LEN);
+			if (res < 0)
+				return -1;
+			STAILQ_REMOVE_HEAD(&samples, entries);
+			free(entry);
+		} else {
+			break;
+		}
 	}
 
 	return 0;
@@ -385,6 +371,25 @@ int main(int argc, char *argv[])
 	timer_fd = timerfd_create(CLOCK_REALTIME, 0);
 	if (timer_fd < 0) {
 		close(sk_fd);
+		return 1;
+	}
+
+	/* Configure timer_fd as a periodic timer with a 10ms interval.
+	 * This periodic timer helps aggregate the presentation 
+	 * of samples and reduces timer re-arming overhead.
+	 */
+	struct itimerspec timer_spec;
+	// Set the initial expiration to 10ms.
+	timer_spec.it_value.tv_sec = 0;
+	timer_spec.it_value.tv_nsec = 10 * 1000000; // 10ms in nanoseconds.
+	// Set the interval to 10ms.
+	timer_spec.it_interval.tv_sec = 0;
+	timer_spec.it_interval.tv_nsec = 10 * 1000000;
+	
+	if (timerfd_settime(timer_fd, 0, &timer_spec, NULL) < 0) {
+		perror("Failed to set periodic timer");
+		close(sk_fd);
+		close(timer_fd);
 		return 1;
 	}
 
