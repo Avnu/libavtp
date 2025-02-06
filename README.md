@@ -42,6 +42,7 @@ formarts is:
 * CRF
 * CVF (H.264 only)
 * RVF
+* VSF
 
 # Examples
 

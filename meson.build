@@ -16,6 +16,7 @@ avtp_lib = library(
 	 'src/avtp_rvf.c',
 	 'src/avtp_ieciidc.c',
 	 'src/avtp_stream.c',
+	 'src/avtp_vsf_stream.c'
 	],
 	version: meson.project_version(),
 	include_directories: include_directories('include'),
@@ -33,6 +34,7 @@ install_headers(
 	'include/avtp_crf.h',
 	'include/avtp_cvf.h',
 	'include/avtp_rvf.h',
+	'include/avtp_vsf_stream.h',
 	'include/avtp_ieciidc.h',
 )
 
@@ -113,6 +115,14 @@ if cmocka.found()
 		build_by_default: false,
 	)
 
+	test_vsf_stream = executable(
+		'test-vsf-stream',
+		'unit/test-vsf-stream.c',
+		include_directories: include_directories('include'),
+		link_with: avtp_lib,
+		dependencies: cmocka,
+		build_by_default: false,
+	)
 	test('AVTP API', test_avtp)
 	test('Stream API', test_stream)
 	test('AAF API', test_aaf)
@@ -120,6 +130,7 @@ if cmocka.found()
 	test('CVF API', test_cvf)
 	test('RVF API', test_rvf)
 	test('IEC61883/IIDC API', test_ieciidc)
+	test('VSF Stream API', test_vsf_stream)
 endif
 
 cc = meson.get_compiler('c')
