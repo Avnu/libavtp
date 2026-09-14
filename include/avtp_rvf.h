@@ -78,7 +78,12 @@ extern "C" {
 #define AVTP_RVF_FRAME_RATE_200	 0x33
 #define AVTP_RVF_FRAME_RATE_240	 0x34
 #define AVTP_RVF_FRAME_RATE_300	 0x35
-#define AVTP_RVF_FRAME_RATE_USER 0x0F
+/* There's a typo on the 2016 standard for user defined frame rate:
+ * Table 42 states 0xF, but it should be 0xFF. In fact, 0xF is part
+ * of the reserved range from 0x4 to 0xF, while user defined is the
+ * last of octet range, 0xFF. This is fixed on 2025 edition.
+ */
+#define AVTP_RVF_FRAME_RATE_USER 0xFF
 
 /* RVF 'colorspace' field values. */
 #define AVTP_RVF_COLORSPACE_YCbCr  0x01
